@@ -272,4 +272,70 @@ CASES: list[Case] = [
             action=None,
         ),
     ),
+
+    # 17. recovery после занятого слота: state уже в "slot_unavailable" (date/time
+    #     сброшены при неудачной попытке), клиент называет НОВОЕ свободное время →
+    #     запись создаётся. Проверяет, что после slot_unavailable сбор возобновляется
+    #     и booking доходит до booked. Слот 24 июня 10:00 заведомо свободен.
+    Case(
+        state=ConversationState(
+            active_intent="booking",
+            status="slot_unavailable",
+            service="стрижка",
+            history=[
+                Message(role="user", content="Запишите на стрижку 20 мая в 15:00"),
+                Message(role="assistant", content="К сожалению, это время уже занято. Пожалуйста, выберите другую дату и/или время."),
+            ],
+        ),
+        current_message=Message(role="user", content="Тогда 24 июня в 10 утра"),
+        expected=Expected(
+            active_intent="booking",
+            status="booked",
+            action="create_booking",
+        ),
+    ),
+
+    # 18. оффтоп посреди booking: собрана услуга, клиент задаёт посторонний вопрос
+    #     («а это дорого?»). Интент не должен сбиться, поля не теряются — ассистент
+    #     продолжает уточнять недостающую дату. LLM должен вернуть continue/unknown.
+    Case(
+        state=ConversationState(
+            active_intent="booking",
+            service="маникюр",
+            history=[
+                Message(role="user", content="Хочу маникюр"),
+                Message(role="assistant", content="На какую дату вы хотите записаться?"),
+            ],
+        ),
+        current_message=Message(role="user", content="А это дорого?"),
+        expected=Expected(
+            active_intent="booking",
+            status="collecting_required_fields",
+            action=None,
+        ),
+    ),
+
+    # 19. booking одной репликой с разговорным временем «в 9 вечера» → 21:00.
+    #     Проверяет резолв времени суток экстрактором. Слот 25 июня 21:00 свободен.
+    Case(
+        state=ConversationState(),
+        current_message=Message(role="user", content="Запишите на педикюр 25 июня в 9 вечера"),
+        expected=Expected(
+            active_intent="booking",
+            status="booked",
+            action="create_booking",
+        ),
+    ),
+
+    # 20. чистый unknown без активного сценария: посторонний вопрос → уточнение,
+    #     ассистент не выдумывает запись. active_intent остаётся None.
+    Case(
+        state=ConversationState(),
+        current_message=Message(role="user", content="А во сколько вы открываетесь?"),
+        expected=Expected(
+            active_intent=None,
+            status="collecting_required_fields",
+            action=None,
+        ),
+    ),
 ]
