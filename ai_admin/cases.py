@@ -338,4 +338,74 @@ CASES: list[Case] = [
             action=None,
         ),
     ),
+
+    # 21. ПАРА (setup): создаём запись на свежий слот 26 июня 13:00, чтобы
+    #     следующий кейс отменил её без указания услуги. Порядко-независимо.
+    Case(
+        state=ConversationState(),
+        current_message=Message(role="user", content="Запишите на маникюр 26 июня в 13:00"),
+        expected=Expected(
+            active_intent="booking",
+            status="booked",
+            action="create_booking",
+        ),
+    ),
+
+    # 22. отмена БЕЗ услуги на живой слот (созданный кейсом 21): услуга опциональна,
+    #     find_booking(when, None) находит запись → отмена проходит.
+    Case(
+        state=ConversationState(),
+        current_message=Message(role="user", content="Отмените запись на 26 июня в 13:00"),
+        expected=Expected(
+            active_intent="cancellation",
+            status="cancelled",
+            action="cancel_appointment",
+        ),
+    ),
+
+    # 23. двойной flip в одном диалоге: диалог начинался как booking, клиент
+    #     передумал на cancellation, а теперь одной репликой снова возвращается
+    #     к booking с полными данными → booked. Проверяет многоходовую смену интента.
+    Case(
+        state=ConversationState(
+            active_intent="cancellation",
+            desired_date=date(2026, 5, 27),
+            history=[
+                Message(role="user", content="Хочу записаться на стрижку"),
+                Message(role="assistant", content="На какую дату вы хотите записаться?"),
+                Message(role="user", content="Хотя нет, отмените запись на 27 мая"),
+                Message(role="assistant", content="На какое время была запись, которую нужно отменить?"),
+            ],
+        ),
+        current_message=Message(
+            role="user",
+            content="Ай, ладно, всё-таки запишите на маникюр 28 июня в 14:00",
+        ),
+        expected=Expected(
+            active_intent="booking",
+            status="booked",
+            action="create_booking",
+        ),
+    ),
+
+    # 24. смена УСЛУГИ (не времени) при slot_unavailable: услуга остаётся, дата/время
+    #     сброшены после занятого слота, клиент меняет услугу и даёт новое время.
+    #     Проверяет, что continue_current_intent + новые поля доводят до booked.
+    Case(
+        state=ConversationState(
+            active_intent="booking",
+            status="slot_unavailable",
+            service="стрижка",
+            history=[
+                Message(role="user", content="Запишите на стрижку 20 мая в 15:00"),
+                Message(role="assistant", content="К сожалению, это время уже занято. Пожалуйста, выберите другую дату и/или время."),
+            ],
+        ),
+        current_message=Message(role="user", content="Тогда пусть будет маникюр 29 июня в 11:00"),
+        expected=Expected(
+            active_intent="booking",
+            status="booked",
+            action="create_booking",
+        ),
+    ),
 ]
