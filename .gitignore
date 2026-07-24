@@ -1,0 +1,18 @@
+# Секреты — НИКОГДА не коммитить
+.env
+
+# Виртуальное окружение
+.venv/
+
+# Python
+__pycache__/
+*.py[cod]
+*.egg-info/
+.pytest_cache/
+.ruff_cache/
+
+# Рабочие заметки (не часть задания)
+PLAN.md
+
+# OS
+.DS_Store
