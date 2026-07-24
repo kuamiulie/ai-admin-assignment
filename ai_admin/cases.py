@@ -408,4 +408,24 @@ CASES: list[Case] = [
             action="create_booking",
         ),
     ),
+
+    # 25. booking в ПРОШЛОЕ: услуга собрана, клиент называет прошедшую дату («вчера»
+    #     = 17.05 при NOW 18.05). Бронь задним числом создаваться не должна —
+    #     прошедший слот сбрасывается, ассистент переспрашивает дату (ClarifyUser).
+    Case(
+        state=ConversationState(
+            active_intent="booking",
+            service="чистка лица",
+            history=[
+                Message(role="user", content="Запишите на чистку лица"),
+                Message(role="assistant", content="На какую дату вы хотите записаться?"),
+            ],
+        ),
+        current_message=Message(role="user", content="Давайте вчера в 15:30"),
+        expected=Expected(
+            active_intent="booking",
+            status="collecting_required_fields",
+            action=None,
+        ),
+    ),
 ]

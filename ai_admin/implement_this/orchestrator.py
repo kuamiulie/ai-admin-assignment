@@ -19,6 +19,19 @@ from ..models import (
 NOW = datetime(2026, 5, 18, 10, 0)
 
 
+def _combined_when(state: ConversationState) -> datetime | None:
+    """Собрать naive datetime из desired_date + desired_time, если оба заданы.
+
+    LLM иногда возвращает время с tzinfo — приводим к naive, чтобы сравнивать с NOW.
+    """
+    if state.desired_date is None or state.desired_time is None:
+        return None
+    t = state.desired_time
+    if t.tzinfo is not None:
+        t = t.replace(tzinfo=None)
+    return datetime.combine(state.desired_date, t)
+
+
 def process_message(
     message: str,
     state: ConversationState,
@@ -104,7 +117,16 @@ def update_state(
     if intent.desired_time is not None:
         updates["desired_time"] = intent.desired_time
 
-    return state.model_copy(update=updates)
+    new_state = state.model_copy(update=updates)
+
+    # Для booking: если собранный слот целиком в прошлом — сбрасываем дату/время,
+    # чтобы decide_next_step переспросил их, а не бронировал задним числом.
+    if new_state.active_intent == "booking":
+        when = _combined_when(new_state)
+        if when is not None and when < NOW:
+            new_state = new_state.model_copy(update={"desired_date": None, "desired_time": None})
+
+    return new_state
 
 
 def decide_next_step(state: ConversationState) -> Plan:
@@ -128,6 +150,12 @@ def decide_next_step(state: ConversationState) -> Plan:
             return ClarifyUser(question="На какую дату вы хотите записаться?")
         if state.desired_time is None:
             return ClarifyUser(question="На какое время хотите записаться?")
+        when = _combined_when(state)
+        if when is not None and when < NOW:
+            # Записаться в прошлое нельзя — просим выбрать другую дату/время.
+            return ClarifyUser(
+                question="Эта дата и время уже прошли. Пожалуйста, выберите другую дату и время.",
+            )
         return Action(
             name="create_booking",
             args={
